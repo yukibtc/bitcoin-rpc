@@ -116,7 +116,7 @@ pub struct TxOutSetInfo {
 }
 
 #[derive(Clone)]
-pub struct RpcClient {
+pub struct Client {
     host: String,
     username: String,
     password: String,
@@ -142,7 +142,7 @@ pub enum Error {
     UnhandledServerError,
 }
 
-impl RpcClient {
+impl Client {
     pub fn new(addr: &SocketAddr, username: &str, password: &str) -> Self {
         Self {
             host: format!("http://{}", *addr),
