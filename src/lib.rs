@@ -123,8 +123,8 @@ pub struct RpcClient {
 }
 
 #[derive(Debug)]
-pub enum RpcError {
-    ReqwestError(reqwest::Error),
+pub enum Error {
+    Reqwest(reqwest::Error),
     FailedToDeserialize(String),
     BadResult,
     Unauthorized,
@@ -156,7 +156,7 @@ impl RpcClient {
         method: &str,
         params: &[serde_json::Value],
         timeout: T,
-    ) -> Result<String, RpcError>
+    ) -> Result<String, Error>
     where
         T: Into<Option<Duration>>,
     {
@@ -179,38 +179,38 @@ impl RpcClient {
 
         match reqwest::StatusCode::as_u16(&res.status()) {
             0_u16..=399_u16 => Ok(res.text()?),
-            400 => Err(RpcError::BadRequest),
-            401 => Err(RpcError::Unauthorized),
-            402 => Err(RpcError::UnhandledClientError),
-            403 => Err(RpcError::Forbidden),
-            404 => Err(RpcError::NotFound),
-            405 => Err(RpcError::MethodNotAllowed),
-            406_u16..=428_u16 => Err(RpcError::UnhandledClientError),
-            429 => Err(RpcError::TooManyRequests),
-            430_u16..=499_u16 => Err(RpcError::UnhandledClientError),
-            500 => Err(RpcError::InternalServerError),
-            501 => Err(RpcError::NotImplemented),
-            502 => Err(RpcError::BadGateway),
-            503 => Err(RpcError::ServiceUnavailable),
-            504 => Err(RpcError::GatewayTimeout),
-            _ => Err(RpcError::UnhandledServerError),
+            400 => Err(Error::BadRequest),
+            401 => Err(Error::Unauthorized),
+            402 => Err(Error::UnhandledClientError),
+            403 => Err(Error::Forbidden),
+            404 => Err(Error::NotFound),
+            405 => Err(Error::MethodNotAllowed),
+            406_u16..=428_u16 => Err(Error::UnhandledClientError),
+            429 => Err(Error::TooManyRequests),
+            430_u16..=499_u16 => Err(Error::UnhandledClientError),
+            500 => Err(Error::InternalServerError),
+            501 => Err(Error::NotImplemented),
+            502 => Err(Error::BadGateway),
+            503 => Err(Error::ServiceUnavailable),
+            504 => Err(Error::GatewayTimeout),
+            _ => Err(Error::UnhandledServerError),
         }
     }
 
-    fn deserialize<T>(data: String) -> Result<T, RpcError>
+    fn deserialize<T>(data: String) -> Result<T, Error>
     where
         T: DeserializeOwned,
     {
         match serde_json::from_str::<GenericResult<T>>(data.as_str()) {
             Ok(u) => match u.result {
                 Some(data) => Ok(data),
-                None => Err(RpcError::BadResult),
+                None => Err(Error::BadResult),
             },
-            Err(error) => Err(RpcError::FailedToDeserialize(error.to_string())),
+            Err(error) => Err(Error::FailedToDeserialize(error.to_string())),
         }
     }
 
-    fn request<R, T>(&self, method: &str, params: &[serde_json::Value], timeout: T) -> Result<R, RpcError>
+    fn request<R, T>(&self, method: &str, params: &[serde_json::Value], timeout: T) -> Result<R, Error>
     where
         R: DeserializeOwned,
         T: Into<Option<Duration>>
@@ -219,51 +219,51 @@ impl RpcClient {
         Self::deserialize::<R>(response)
     }
 
-    pub fn get_blockchain_info(&self) -> Result<BlockchainInfo, RpcError> {
+    pub fn get_blockchain_info(&self) -> Result<BlockchainInfo, Error> {
         self.request("getblockchaininfo", &[], None)
     }
 
-    pub fn get_network_info(&self) -> Result<NetworkInfo, RpcError> {
+    pub fn get_network_info(&self) -> Result<NetworkInfo, Error> {
         self.request("getnetworkinfo", &[], None)
     }
 
-    pub fn get_mining_info(&self) -> Result<MiningInfo, RpcError> {
+    pub fn get_mining_info(&self) -> Result<MiningInfo, Error> {
         self.request("getmininginfo", &[], None)
     }
 
-    pub fn get_peer_info(&self) -> Result<Vec<PeerInfo>, RpcError> {
+    pub fn get_peer_info(&self) -> Result<Vec<PeerInfo>, Error> {
         self.request("getpeerinfo", &[], None)
     }
 
-    pub fn get_index_info(&self) -> Result<IndexInfo, RpcError> {
+    pub fn get_index_info(&self) -> Result<IndexInfo, Error> {
         self.request("getindexinfo", &[], None)
     }
 
-    pub fn get_block_count(&self) -> Result<u32, RpcError> {
+    pub fn get_block_count(&self) -> Result<u32, Error> {
         self.request("getblockcount", &[], None)
     }
 
-    pub fn get_block_hash(&self, block_height: u32) -> Result<String, RpcError> {
+    pub fn get_block_hash(&self, block_height: u32) -> Result<String, Error> {
         self.request("getblockhash", &[block_height.into()], None)
     }
 
-    pub fn get_block(&self, block_hash: &str) -> Result<Block, RpcError> {
+    pub fn get_block(&self, block_hash: &str) -> Result<Block, Error> {
         self.request("getblock", &[block_hash.into(), 2.into()], Duration::from_secs(120))
     }
 
-    pub fn get_block_hex(&self, block_hash: &str) -> Result<String, RpcError> {
+    pub fn get_block_hex(&self, block_hash: &str) -> Result<String, Error> {
         self.request("getblock", &[block_hash.into(), 0.into()], Duration::from_secs(120))
     }
 
-    pub fn get_raw_mempool(&self) -> Result<Vec<String>, RpcError> {
+    pub fn get_raw_mempool(&self) -> Result<Vec<String>, Error> {
         self.request("getrawmempool", &[], Duration::from_secs(120))
     }
 
-    pub fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, RpcError> {
+    pub fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, Error> {
         self.request("getrawtransaction", &[txid.into(), true.into()], Duration::from_secs(120))
     }
 
-    pub fn get_raw_transaction_with_prevouts(&self, txid: &str) -> Result<Transaction, RpcError> {
+    pub fn get_raw_transaction_with_prevouts(&self, txid: &str) -> Result<Transaction, Error> {
         let mut raw_transaction = self.get_raw_transaction(txid)?;
 
         raw_transaction.vin.iter_mut().for_each(|input| {
@@ -286,17 +286,17 @@ impl RpcClient {
         Ok(raw_transaction)
     }
 
-    pub fn get_difficulty(&self) -> Result<f64, RpcError> {
+    pub fn get_difficulty(&self) -> Result<f64, Error> {
         self.request("getdifficulty", &[], None)
     }
 
-    pub fn get_txoutset_info(&self) -> Result<TxOutSetInfo, RpcError> {
+    pub fn get_txoutset_info(&self) -> Result<TxOutSetInfo, Error> {
         self.request("gettxoutsetinfo", &[], Duration::from_secs(1800))
     }
 }
 
-impl From<reqwest::Error> for RpcError {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
-        RpcError::ReqwestError(err)
+        Error::Reqwest(err)
     }
 }
