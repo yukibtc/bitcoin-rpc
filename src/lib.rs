@@ -251,6 +251,10 @@ impl RpcClient {
         self.request("getblock", &[block_hash.into(), 2.into()], Duration::from_secs(120))
     }
 
+    pub fn get_block_hex(&self, block_hash: &str) -> Result<String, RpcError> {
+        self.request("getblock", &[block_hash.into(), 0.into()], Duration::from_secs(120))
+    }
+
     pub fn get_raw_mempool(&self) -> Result<Vec<String>, RpcError> {
         self.request("getrawmempool", &[], Duration::from_secs(120))
     }
