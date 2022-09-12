@@ -4,9 +4,9 @@
 #[macro_use]
 extern crate serde;
 
-use std::net::SocketAddr;
 use std::time::Duration;
 
+use bitcoin::{Block, BlockHash, Transaction, Txid};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
@@ -18,10 +18,10 @@ struct GenericResult<T> {
 #[derive(Deserialize, Debug)]
 pub struct BlockchainInfo {
     pub chain: String,
-    pub blocks: u32,
-    pub headers: u32,
+    pub blocks: u64,
+    pub headers: u64,
     #[serde(rename = "bestblockhash")]
-    pub best_block_hash: String,
+    pub best_block_hash: BlockHash,
     pub difficulty: f64,
     #[serde(rename = "mediantime")]
     pub median_time: u64,
@@ -40,10 +40,12 @@ pub struct NetworkInfo {
 
 #[derive(Deserialize, Debug)]
 pub struct MiningInfo {
-    pub blocks: u32,
+    pub blocks: u64,
     pub difficulty: f64,
-    pub networkhashps: f64,
-    pub pooledtx: u32,
+    #[serde(rename = "networkhashps")]
+    pub network_hash_ps: f64,
+    #[serde(rename = "pooledtx")]
+    pub pooled_tx: usize,
     pub chain: String,
 }
 
@@ -66,52 +68,12 @@ pub struct IndexInfo {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct TxIn {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub txid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vout: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prevout: Option<TxOut>,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-pub struct TxOutScripts {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<String>,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-pub struct TxOut {
-    pub value: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub n: Option<u32>,
-    #[serde(rename = "scriptPubKey")]
-    pub script_pub_key: TxOutScripts,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Transaction {
-    pub txid: String,
-    pub vin: Vec<TxIn>,
-    pub vout: Vec<TxOut>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Block {
-    pub hash: String,
-    pub confirmations: u32,
-    pub size: u32,
-    pub height: u32,
-    pub version: u32,
-    pub tx: Vec<Transaction>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
 pub struct TxOutSetInfo {
-    pub height: u32,
-    pub bestblock: String,
-    pub txouts: u32,
+    pub height: u64,
+    #[serde(rename = "bestblock")]
+    pub best_block: BlockHash,
+    #[serde(rename = "txouts")]
+    pub tx_outs: u64,
     pub total_amount: f64,
 }
 
@@ -125,6 +87,7 @@ pub struct Client {
 #[derive(Debug)]
 pub enum Error {
     Reqwest(reqwest::Error),
+    SerdeJson(serde_json::Error),
     FailedToDeserialize(String),
     BadResult,
     Unauthorized,
@@ -143,9 +106,9 @@ pub enum Error {
 }
 
 impl Client {
-    pub fn new(addr: &SocketAddr, username: &str, password: &str) -> Self {
+    pub fn new(host: &str, username: &str, password: &str) -> Self {
         Self {
-            host: format!("http://{}", *addr),
+            host: host.into(),
             username: username.into(),
             password: password.into(),
         }
@@ -210,10 +173,15 @@ impl Client {
         }
     }
 
-    fn request<R, T>(&self, method: &str, params: &[serde_json::Value], timeout: T) -> Result<R, Error>
+    fn request<R, T>(
+        &self,
+        method: &str,
+        params: &[serde_json::Value],
+        timeout: T,
+    ) -> Result<R, Error>
     where
         R: DeserializeOwned,
-        T: Into<Option<Duration>>
+        T: Into<Option<Duration>>,
     {
         let response = self.call_jsonrpc(method, params, timeout)?;
         Self::deserialize::<R>(response)
@@ -239,64 +207,67 @@ impl Client {
         self.request("getindexinfo", &[], None)
     }
 
-    pub fn get_block_count(&self) -> Result<u32, Error> {
+    pub fn get_block_count(&self) -> Result<u64, Error> {
         self.request("getblockcount", &[], None)
     }
 
-    pub fn get_block_hash(&self, block_height: u32) -> Result<String, Error> {
+    pub fn get_block_hash(&self, block_height: u64) -> Result<BlockHash, Error> {
         self.request("getblockhash", &[block_height.into()], None)
     }
 
-    pub fn get_block(&self, block_hash: &str) -> Result<Block, Error> {
-        self.request("getblock", &[block_hash.into(), 2.into()], Duration::from_secs(120))
+    pub fn get_block(&self, block_hash: &BlockHash) -> Result<Block, Error> {
+        self.request(
+            "getblock",
+            &[into_json(block_hash)?, 2.into()],
+            Duration::from_secs(120),
+        )
     }
 
-    pub fn get_block_hex(&self, block_hash: &str) -> Result<String, Error> {
-        self.request("getblock", &[block_hash.into(), 0.into()], Duration::from_secs(120))
+    pub fn get_block_hex(&self, block_hash: &BlockHash) -> Result<String, Error> {
+        self.request(
+            "getblock",
+            &[into_json(block_hash)?, 0.into()],
+            Duration::from_secs(120),
+        )
     }
 
-    pub fn get_raw_mempool(&self) -> Result<Vec<String>, Error> {
+    pub fn get_raw_mempool(&self) -> Result<Vec<Txid>, Error> {
         self.request("getrawmempool", &[], Duration::from_secs(120))
     }
 
-    pub fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, Error> {
-        self.request("getrawtransaction", &[txid.into(), true.into()], Duration::from_secs(120))
-    }
-
-    pub fn get_raw_transaction_with_prevouts(&self, txid: &str) -> Result<Transaction, Error> {
-        let mut raw_transaction = self.get_raw_transaction(txid)?;
-
-        raw_transaction.vin.iter_mut().for_each(|input| {
-            if let Some(input_txid) = &input.txid {
-                if let Some(vout) = input.vout {
-                    if let Ok(prev_raw_transaction) = self.get_raw_transaction(input_txid.as_str())
-                    {
-                        prev_raw_transaction.vout.into_iter().for_each(|output| {
-                            if let Some(output_n) = output.n {
-                                if output_n == vout {
-                                    input.prevout = Some(output);
-                                }
-                            }
-                        });
-                    }
-                }
-            }
-        });
-
-        Ok(raw_transaction)
+    pub fn get_raw_transaction(&self, txid: &Txid) -> Result<Transaction, Error> {
+        self.request(
+            "getrawtransaction",
+            &[into_json(txid)?, true.into()],
+            Duration::from_secs(120),
+        )
     }
 
     pub fn get_difficulty(&self) -> Result<f64, Error> {
         self.request("getdifficulty", &[], None)
     }
 
-    pub fn get_txoutset_info(&self) -> Result<TxOutSetInfo, Error> {
+    pub fn get_tx_out_set_info(&self) -> Result<TxOutSetInfo, Error> {
         self.request("gettxoutsetinfo", &[], Duration::from_secs(1800))
     }
+}
+
+/// Shorthand for converting a variable into a serde_json::Value.
+fn into_json<T>(val: T) -> Result<serde_json::Value, Error>
+where
+    T: serde::ser::Serialize,
+{
+    Ok(serde_json::to_value(val)?)
 }
 
 impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Error::Reqwest(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::SerdeJson(err)
     }
 }
