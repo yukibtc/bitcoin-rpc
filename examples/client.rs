@@ -1,7 +1,5 @@
-// Copyright (c) 2021-2022 Yuki Kishimoto
+// Copyright (c) 2021-2024 Yuki Kishimoto
 // Distributed under the MIT software license
-
-extern crate bitcoin_rpc;
 
 use bitcoin_rpc::Client;
 

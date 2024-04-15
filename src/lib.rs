@@ -1,21 +1,19 @@
-// Copyright (c) 2021-2022 Yuki Kishimoto
+// Copyright (c) 2021-2024 Yuki Kishimoto
 // Distributed under the MIT software license
-
-#[macro_use]
-extern crate serde;
 
 use std::time::Duration;
 
 use bitcoin::{Block, BlockHash, Transaction, Txid};
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde_json::json;
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 struct GenericResult<T> {
     result: Option<T>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BlockchainInfo {
     pub chain: String,
     pub blocks: u64,
@@ -31,14 +29,14 @@ pub struct BlockchainInfo {
     pub pruned: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct NetworkInfo {
     pub version: u32,
     #[serde(rename = "networkactive")]
     pub network_active: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MiningInfo {
     pub blocks: u64,
     pub difficulty: f64,
@@ -49,25 +47,25 @@ pub struct MiningInfo {
     pub chain: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PeerInfo {
     pub id: u32,
     pub addr: String,
     pub network: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TxIndex {
     pub synced: bool,
     pub best_block_height: u32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct IndexInfo {
     pub txindex: TxIndex,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TxOutSetInfo {
     pub height: u64,
     #[serde(rename = "bestblock")]
